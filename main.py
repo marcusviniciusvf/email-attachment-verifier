@@ -55,20 +55,39 @@ def print_assuntos_emails(mail):
         if status != 'OK':
             print(f"Erro ao buscar email {unique_ID.decode()}")
             continue
-        
-        raw_email = dados[0][1] #EMAIL RAW (DADOS E MENSAGEM)
-        msg = email.message_from_bytes(raw_email) # MENSAGEM
-        print(msg)
-        subject, encoding = decode_header(msg["Subject"])[0]
-        print(subject)
+        raw_Email = dados[0][1] #EMAIL RAW (DADOS E MENSAGEM)
+        msg_Email = email.message_from_bytes(raw_Email) # MENSAGEM
+        subject, encoding = decode_header(msg_Email["Subject"])[0]
         if isinstance(subject, bytes):
             subject = subject.decode(encoding or "utf-8", errors="ignore")
+
+        emailDictChanger["id"]= unique_ID.decode()
+        emailDictChanger["sender"] = msg_Email["From"]
+        emailDictChanger["date"] = msg_Email["Date"]
+        emailDictChanger["subject"] = subject
         
-        print(f"Email ID {unique_ID.decode()}: Assunto: {subject}")
-    
+        for part in msg_Email.walk():
+            content_type = part.get_content_type()
+            content_disposition = part.get_content_disposition() 
+            if content_type == "text/plain":# Corpo em texto
+                emailDictChanger["body"] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
 
-
-
+            elif content_type == "text/html":# Corpo em HTML
+                emailDictChanger["body_Html"] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+            
+            elif content_disposition == "attachment":# Anexos
+                emailDictChanger["has_Attachment"] = True
+                filename = part.get_filename()
+                if filename:
+                    # decodificando nome do arquivo se necessário
+                    fname, enc = decode_header(filename)[0]
+                    if isinstance(fname, bytes):
+                        fname = fname.decode(enc or "utf-8", errors="ignore")
+                        emailDictChanger["attachments"].append(fname)
+        #date_Email = msg["Date"]
+        #sender_Email = msg["From"]
+        #print(f"Email ID {unique_ID.decode()}:\nAssunto: {subject}\nData: {date_Email}\nSender: {sender_Email}\nBody: {msg}")
+    print(emailDictChanger)
 
 mail.select("inbox")
 

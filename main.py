@@ -25,7 +25,7 @@ emailDict = {
     "attachments": []        # LISTA DE ANEXOS
 }
 emailDictChanger = emailDict
-emails = []
+emails_List = []
 
 PASTA_ANEXOS = "downloaded_Files"
 os.makedirs(PASTA_ANEXOS, exist_ok=True)
@@ -37,9 +37,10 @@ print(type(f'SINCE {LAST_VERIFICATION}'))
 print(LAST_VERIFICATION)
 
 def print_assuntos_emails(mail):
+    global emailDictChanger, emails_List
     # Buscar todos os e-mails
-    print('SINCE {LAST_VERIFICATION}')
-    print(type('SINCE {LAST_VERIFICATION}'))
+    print('SINCE f{LAST_VERIFICATION}')
+    print(type('SINCE f{LAST_VERIFICATION}'))
     status, mensagens = mail.search(None, f'SINCE {LAST_VERIFICATION}')
     print(status, mensagens)
     if status != 'OK':
@@ -73,7 +74,7 @@ def print_assuntos_emails(mail):
                 emailDictChanger["body"] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
 
             elif content_type == "text/html":# Corpo em HTML
-                emailDictChanger["body_Html"] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                emailDictChanger["body_Html"] = 'test'#part.get_payload(decode=True).decode('utf-8', errors='ignore')
             
             elif content_disposition == "attachment":# Anexos
                 emailDictChanger["has_Attachment"] = True
@@ -84,10 +85,10 @@ def print_assuntos_emails(mail):
                     if isinstance(fname, bytes):
                         fname = fname.decode(enc or "utf-8", errors="ignore")
                         emailDictChanger["attachments"].append(fname)
-        #date_Email = msg["Date"]
-        #sender_Email = msg["From"]
-        #print(f"Email ID {unique_ID.decode()}:\nAssunto: {subject}\nData: {date_Email}\nSender: {sender_Email}\nBody: {msg}")
-    print(emailDictChanger)
+        date_Email = msg_Email["Date"]
+        sender_Email = msg_Email["From"]
+        emails_List.append(emailDictChanger)
+        emailDictChanger = emailDict.copy()
 
 mail.select("inbox")
 

@@ -4,7 +4,9 @@ from email.header import decode_header
 import os
 import json
 from datetime import datetime
-from dotenv import load_dotenv 
+from dotenv import load_dotenv
+import re
+import hashlib 
 load_dotenv()
 
 IMAP_SERVER = os.getenv('IMAP_SERVER')
@@ -19,6 +21,7 @@ emailDict = {
     "sender": None,          # REMETENTE
     "subject": None,         # ASSUNTO
     "body": None,            # CORPO EMAIL
+    "links": None,           # LINKS CONTIDOS NO BODY
     "body_Html": None,       # CORPO HTML
     "has_Attachment": False, # TEM ANEXO
     "attachments": []        # LISTA DE ANEXOS
@@ -68,28 +71,77 @@ def print_assuntos_emails(mail):
         
         for part in msg_Email.walk():
             content_type = part.get_content_type()
-            content_disposition = part.get_content_disposition() 
-            if content_type == "text/plain":# Corpo em texto
-                emailDictChanger["body"] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+            content_disposition = str(part.get("Content-Disposition"))
+            filename = part.get_filename()
 
-            elif content_type == "text/html":# Corpo em HTML
-                emailDictChanger["body_Html"] = 'test'#part.get_payload(decode=True).decode('utf-8', errors='ignore')
-            
-            elif content_disposition == "attachment":# Anexos
+            # ======== Corpo em texto simples ========
+            if content_type == "text/plain" and not filename:
+                try:
+                    emailDictChanger["body"] = part.get_payload(decode=True).decode(
+                        part.get_content_charset() or "utf-8", errors="ignore"
+                    )
+                except Exception:
+                    emailDictChanger["body"] = ""
+
+            # ======== Corpo HTML ========
+            elif content_type == "text/html" and not filename:
+                try:
+                    emailDictChanger["body_Html"] = part.get_payload(decode=True).decode(
+                        part.get_content_charset() or "utf-8", errors="ignore"
+                    )
+                except Exception:
+                    emailDictChanger["body_Html"] = ""
+
+            # ======== Anexo (attachment ou inline com filename) ========
+            elif filename:
                 emailDictChanger["has_Attachment"] = True
-                filename = part.get_filename()
-                if filename:
-                    # decodificando nome do arquivo se necessário
-                    fname, enc = decode_header(filename)[0]
-                    if isinstance(fname, bytes):
-                        fname = fname.decode(enc or "utf-8", errors="ignore")
-                        emailDictChanger["attachments"].append(fname)
+
+                # Decodificar nome, se necessário
+                fname, enc = decode_header(filename)[0]
+                if isinstance(fname, bytes):
+                    fname = fname.decode(enc or "utf-8", errors="ignore")
+
+                # Caminho completo para salvar o arquivo
+                filepath = os.path.join(PASTA_ANEXOS, fname)
+
+                # Evita sobrescrever arquivos com o mesmo nome
+                if os.path.exists(filepath):
+                    base, ext = os.path.splitext(fname)
+                    filepath = os.path.join(PASTA_ANEXOS, f"{base}_{unique_ID.decode()}{ext}")
+
+                # Salva o anexo
+                payload = part.get_payload(decode=True)
+                if payload:
+                    with open(filepath, "wb") as f:
+                        f.write(payload)
+                    print(f"✅ Anexo salvo: {filepath}")
+                    emailDictChanger["attachments"].append(fname)
         date_Email = msg_Email["Date"]
         sender_Email = msg_Email["From"]
         emails_List.append(emailDictChanger)
         emailDictChanger = emailDict.copy()
 
-mail.select("inbox")
+def link_Parser(content_List):
+    for content_item in content_List:
+        body_text = content_item.get("body", "")
+        
+        # Expressão regular para capturar links (http e https)
+        links = re.findall(r'https?://[^\s\'"<>]+', body_text)
 
+        """print(f"ID: {email_item['id']} — Total de links encontrados: {len(links)}")
+        for link in links:
+            print(link)
+        print("-" * 80)"""
+        content_item["links"] = links
+
+def sha256_File(filepath, chunk_size=8192):
+    """Retorna o hash SHA-256 em hexadecimal para o arquivo informado."""
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+mail.select("inbox")
 print_assuntos_emails(mail)
-print(emails_List)
+link_Parser(emails_List)

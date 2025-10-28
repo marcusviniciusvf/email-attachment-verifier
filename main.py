@@ -4,14 +4,13 @@ from email.header import decode_header
 import os
 import json
 from datetime import datetime
+from dotenv import load_dotenv 
+load_dotenv()
 
-with open("configs.json") as f: #ABRIR O JSON COM INFORMAÇÕES DE LOGIN E SENHA DO EMAIL
-    config_Data = json.load(f)
-
-IMAP_SERVER = "imap.gmail.com" #CABEÇALHO DE LOGIN IMAP
-EMAIL_USER = config_Data["EMAIL_USER"]
-EMAIL_PASS = config_Data["EMAIL_PASS"]
-LAST_VERIFICATION = config_Data["LAST_VERIFICATION"]
+IMAP_SERVER = os.getenv('IMAP_SERVER')
+EMAIL_USER = os.getenv('EMAIL_USER')
+EMAIL_PASS = os.getenv('EMAIL_PASS')
+LAST_VERIFICATION = os.getenv('LAST_VERIFICATION')
 DATE_TODAY = (datetime.now()).strftime("%d-%b-%Y")
 
 emailDict = {
@@ -24,7 +23,7 @@ emailDict = {
     "has_Attachment": False, # TEM ANEXO
     "attachments": []        # LISTA DE ANEXOS
 }
-emailDictChanger = emailDict
+emailDictChanger = emailDict.copy()
 emails_List = []
 
 PASTA_ANEXOS = "downloaded_Files"
@@ -39,8 +38,8 @@ print(LAST_VERIFICATION)
 def print_assuntos_emails(mail):
     global emailDictChanger, emails_List
     # Buscar todos os e-mails
-    print('SINCE f{LAST_VERIFICATION}')
-    print(type('SINCE f{LAST_VERIFICATION}'))
+    print(f'SINCE {LAST_VERIFICATION}')
+    print(type(f'SINCE {LAST_VERIFICATION}'))
     status, mensagens = mail.search(None, f'SINCE {LAST_VERIFICATION}')
     print(status, mensagens)
     if status != 'OK':
@@ -93,5 +92,4 @@ def print_assuntos_emails(mail):
 mail.select("inbox")
 
 print_assuntos_emails(mail)
-
-
+print(emails_List)

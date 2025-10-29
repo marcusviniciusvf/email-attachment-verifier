@@ -7,13 +7,16 @@ from datetime import datetime
 from dotenv import load_dotenv
 import re
 import hashlib 
-load_dotenv()
+import requests
+from functools import reduce
 
 IMAP_SERVER = os.getenv('IMAP_SERVER')
 EMAIL_USER = os.getenv('EMAIL_USER')
 EMAIL_PASS = os.getenv('EMAIL_PASS')
 LAST_VERIFICATION = os.getenv('LAST_VERIFICATION')
+VIRUSTOTAL_APIKEY= os.getenv('VIRUSTOTAL_APIKEY')
 DATE_TODAY = (datetime.now()).strftime("%d-%b-%Y")
+load_dotenv()
 
 emailDict = {
     "id": None,              # ID UNICO IMAP
@@ -26,8 +29,10 @@ emailDict = {
     "has_Attachment": False, # TEM ANEXO
     "attachments": []        # LISTA DE ANEXOS
 }
+
 emailDictChanger = emailDict.copy()
 emails_List = []
+analyzed_Emails = []
 
 PASTA_ANEXOS = "downloaded_Files"
 os.makedirs(PASTA_ANEXOS, exist_ok=True)
@@ -127,21 +132,54 @@ def link_Parser(content_List):
         
         # Expressão regular para capturar links (http e https)
         links = re.findall(r'https?://[^\s\'"<>]+', body_text)
-
-        """print(f"ID: {email_item['id']} — Total de links encontrados: {len(links)}")
-        for link in links:
-            print(link)
-        print("-" * 80)"""
         content_item["links"] = links
 
-def sha256_File(filepath, chunk_size=8192):
-    """Retorna o hash SHA-256 em hexadecimal para o arquivo informado."""
+def sha256_File(path_File, chunk_size=8192):
     h = hashlib.sha256()
-    with open(filepath, "rb") as f:
+    with open(f'downloaded_Files/{path_File}', "rb") as f:
         for chunk in iter(lambda: f.read(chunk_size), b""):
             h.update(chunk)
     return h.hexdigest()
 
+def checkSha256(filename):
+    url = f"https://www.virustotal.com/api/v3/files/{filename}"
+
+    headers = {
+        "accept": "application/json",
+        "x-apikey": VIRUSTOTAL_APIKEY
+    }
+    try:
+        response = requests.get(url, headers=headers)
+         # Checa o status code
+        if response.status_code == 200:
+            # Tudo certo, retorna o JSON
+            return response.json()
+        else:
+            print(f"Erro {response.status_code}: {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        # Captura erros de rede
+        print(f"Erro de requisição: {e}")
+        return None
+    
 mail.select("inbox")
 print_assuntos_emails(mail)
 link_Parser(emails_List)
+
+for item in emails_List: #Reads each individual e-mail response
+    if item["has_Attachment"]== True:
+        for i in range(len(item['attachments'])): #Go through attachments
+            analysis_Response = checkSha256(sha256_File(item['attachments'][i-1]))
+            if type(analysis_Response)==dict:
+                attributes = analysis_Response["data"]
+                keys_needed = [
+                    ['links'],
+                    ["attributes", "sha256"],
+                    ["attributes", "last_analysis_stats"],
+                    ["attributes", "sandbox_verdicts"]
+                ]
+                filtered_dynamic = {
+                    path[-1]: reduce(lambda acc, key: acc.get(key, {}) if isinstance(acc, dict) else None, path, attributes)
+                    for path in keys_needed
+                }
+
